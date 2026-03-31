@@ -10,25 +10,31 @@ import os
 # --- CONFIGURATION ---
 st.set_page_config(page_title="Capitalis - Diagnostic Expert", layout="wide")
 
-# --- CONNEXION GOOGLE SHEETS ---
+# FONCTION 1 : SAUVEGARDER
 def sauvegarder_dans_sheets(donnees):
     try:
         creds = st.secrets["gcp_service_account"]
         gc = gspread.service_account_from_dict(creds)
         sh = gc.open("Diagnostics_Coop").sheet1
-        
-        # On tente l'ajout
-        resultat = sh.append_row(donnees)
-        
-        # Si on arrive ici sans erreur, ou si on reçoit un code de succès
+        sh.append_row(donnees)
         return True
     except Exception as e:
-        # On n'affiche l'erreur que si ce n'est pas un code 200
-        if "200" not in str(e):
-            st.error(f"Erreur réelle : {e}")
+        if "200" not in str(e): # On ignore le faux message d'erreur 200
+            st.error(f"Erreur de sauvegarde : {e}")
             return False
         return True
 
+# FONCTION 2 : LIRE (HISTORIQUE)
+def lire_historique_sheets():
+    try:
+        creds = st.secrets["gcp_service_account"]
+        gc = gspread.service_account_from_dict(creds)
+        sh = gc.open("Diagnostics_Coop").sheet1
+        donnees = sh.get_all_records()
+        return pd.DataFrame(donnees)
+    except Exception as e:
+        st.error(f"Erreur de lecture : {e}")
+        return None
 # --- LOGIQUE PDF ---
 class PDF(FPDF):
     def header(self):
@@ -70,7 +76,9 @@ prix_mat = st.number_input("Prix matière 1ère campagne (FCFA/kg)", 0)
 
 # --- MODULES DE DIAGNOSTIC ---
 st.divider()
-tab1, tab2, tab3, tab4, tab5, tab_syn = st.tabs(["⚖️ Gouv", "🌿 Dura", "🚜 Ops", "💰 Fin", "🔍 Traca", "🏁 TABLEAU DE BORD"])
+tab1, tab2, tab3, tab4, tab5, tab_syn, tab_hist = st.tabs([
+    "⚖️ Gouv", "🌿 Dura", "🚜 Ops", "💰 Fin", "🔍 Traca", "🏁 SYNTHÈSE", "📜 HISTORIQUE"
+])
 
 with tab1:
     g1 = st.checkbox("Présence docs légaux? (RCCM, DEF, Pouvoirs)")
@@ -192,3 +200,20 @@ with c_btn2:
 
     st.download_button("📥 Télécharger le Rapport PDF", export_pdf(), 
                        f"Diagnostic_{nom_coop}.pdf", "application/pdf", use_container_width=True)
+# ... (Vos codes pour tab1, tab2, tab3, tab4, tab5 et tab_syn) ...
+
+# TOUT EN BAS DU FICHIER :
+with tab_hist:
+    st.header("📜 Historique des diagnostics")
+    if st.button("🔄 Actualiser la liste", use_container_width=True):
+        with st.spinner("Chargement depuis Google Sheets..."):
+            df_historique = lire_historique_sheets()
+            if df_historique is not None and not df_historique.empty:
+                # On affiche les 10 derniers diagnostics
+                st.dataframe(
+                    df_historique.iloc[::-1].head(10), 
+                    use_container_width=True, 
+                    hide_index=True
+                )
+            else:
+                st.info("Aucun diagnostic trouvé dans la base de données.")
