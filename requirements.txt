@@ -2,3 +2,6 @@ streamlit
 pandas
 plotly
 fpdf
+gspread
+google-auth
+kaleido==0.2.1
