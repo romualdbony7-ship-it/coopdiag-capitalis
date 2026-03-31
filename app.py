@@ -15,7 +15,7 @@ def sauvegarder_dans_sheets(donnees):
     try:
         creds = st.secrets["gcp_service_account"]
         gc = gspread.service_account_from_dict(creds)
-        # Assure-toi que le nom correspond exactement à ton fichier Sheets
+        # Assurez-vous que le nom du fichier Sheets est exact
         sh = gc.open("Diagnostics_Coop").sheet1
         sh.append_row(donnees)
         return True
@@ -36,10 +36,10 @@ def clean(text):
     return str(text).encode('latin-1', 'replace').decode('latin-1')
 
 # --- SAISIE DES INFORMATIONS GÉNÉRALES ---
-st.title("📋 Questionnaire de Diagnostic Complet")
+st.title("📋 Diagnostic Coopératif Complet")
 
-with st.expander("🏢 Identification de la Coopérative", expanded=True):
-    col1, col2 = st.columns(2)
+with st.expander("🏢 Identification & Localisation", expanded=True):
+    col1, col2 = st.columns([1, 1])
     with col1:
         nom_coop = st.text_input("Nom de la Coopérative")
         pca_nom = st.text_input("Nom du PCA")
@@ -51,19 +51,20 @@ with st.expander("🏢 Identification de la Coopérative", expanded=True):
         nb_membres = st.number_input("Nombre de membres", 0)
         filieres = st.multiselect("Filières", ["Cacao", "Hévéa", "Anacarde", "Palmiers à huile", "Maïs", "vivrier", "Aquaculture"])
 
-# --- LOGIQUE DE MATURITÉ ---
+# LOGIQUE DE MATURITÉ
 alerte_maturite = ""
 if any(f in filieres for f in ["Cacao", "Hévéa", "Anacarde"]):
     nb_campagnes = st.number_input("Nombre de campagnes réalisées", 0)
     alerte_maturite = "Coop immature" if nb_campagnes < 2 else "Coop mature"
-    st.info(f"Statut : {alerte_maturite}")
+    if alerte_maturite == "Coop immature": st.warning(alerte_maturite)
+    else: st.success(alerte_maturite)
 
 clients = st.text_area("Nom des clients")
 prix_mat = st.number_input("Prix matière 1ère campagne (FCFA/kg)", 0)
 
 # --- MODULES DE DIAGNOSTIC ---
 st.divider()
-tab1, tab2, tab3, tab4, tab5, tab_syn = st.tabs(["⚖️ Gouv", "🌿 Dura", "🚜 Ops", "💰 Fin", "🔍 Traca", "🏁 SYNTHÈSE"])
+tab1, tab2, tab3, tab4, tab5, tab_syn = st.tabs(["⚖️ Gouv", "🌿 Dura", "🚜 Ops", "💰 Fin", "🔍 Traca", "🏁 TABLEAU DE BORD"])
 
 with tab1:
     g1 = st.checkbox("Présence docs légaux? (RCCM, DEF, Pouvoirs)")
@@ -101,7 +102,7 @@ with tab4:
     ca_estime = moy_vol * 1000 * prix_mat
     benef_total = moy_vol * 1000 * marge
     seuil_benef = ca_estime * 0.03
-    alerte_benef = (benef_total < seuil_benef)
+    alerte_benef = (benef_total < seuil_benef) if ca_estime > 0 else False
     score_fin = (((fdr > 0) + (marge > 0) + (not alerte_benef)) / 3) * 100
 
 with tab5:
@@ -113,37 +114,42 @@ with tab5:
 score_final = (score_gouv + score_dura + score_ops + score_fin + score_traca) / 5
 
 with tab_syn:
-    st.header("🏁 Synthèse du Diagnostic")
+    st.header("📊 Tableau de Bord de Performance")
     
     alertes_liste = []
     if alerte_maturite == "Coop immature": alertes_liste.append("⚠️ Coopérative immature (< 2 campagnes)")
     if n_emp < 3: alertes_liste.append("❌ Effectif insuffisant (< 3 personnes)")
     if n_cnps < 1: alertes_liste.append("❌ Absence de déclaration CNPS")
-    if certif == "Non": alertes_liste.append("⚠️ Pas éligible au crédit (Pas de certification)")
-    if alerte_v: alertes_liste.append("⚠️ Volume commercial très faible (< 200t)")
+    if certif == "Non": alertes_liste.append("⚠️ Non éligible au crédit (Certification manquante)")
+    if alerte_v: alertes_liste.append("⚠️ Volume commercial trop faible (< 200t)")
     if alerte_f: alertes_liste.append("🚨 Besoin de Véhicule (Pas de flotte)")
     if alerte_n_veh: alertes_liste.append("🚨 Besoin de Véhicule (Sous-équipé pour > 500t)")
     if alerte_benef: alertes_liste.append("⚠️ Bénéfice faible (< 3% du CA)")
     if trac_v == "Non" or bord == "Non": alertes_liste.append("🚨 Besoin de traçabilité interne")
 
-    col_s1, col_s2 = st.columns(2)
-    with col_s1:
-        st.metric("Score Global", f"{score_final:.1f}%")
-        df_perf = pd.DataFrame({
+    col_res1, col_res2 = st.columns([1, 1])
+    with col_res1:
+        st.metric("Score Global de Conformité", f"{score_final:.1f}%")
+        # Graphique
+        df_graph = pd.DataFrame({
             "Module": ["Gouv", "Dura", "Ops", "Fin", "Traca"],
             "Score": [score_gouv, score_dura, score_ops, score_fin, score_traca]
         })
-        fig = px.bar(df_perf, x="Module", y="Score", color="Score", range_y=[0,100], title="Performance par Module")
+        fig = px.bar(df_graph, x="Module", y="Score", color="Score", range_y=[0,100], 
+                     color_continuous_scale="RdYlGn", title="Performance par Pilier")
         st.plotly_chart(fig, use_container_width=True)
 
-    with col_s2:
-        st.subheader("Points d'attention")
-        for a in alertes_liste: st.error(a)
+    with col_res2:
+        st.subheader("⚠️ Alertes & Besoins")
+        if alertes_liste:
+            for a in alertes_liste: st.error(a)
+        else:
+            st.success("Aucune alerte majeure détectée.")
         
-        st.subheader("Points Positifs")
-        if score_final > 70: st.success("✅ Performance globale solide")
-        if g1 and g2: st.success("✅ Structure de gouvernance conforme")
-        if fdr > 0: st.success("✅ Capacité d'autofinancement présente")
+        st.subheader("✅ Points Forts")
+        if score_final > 70: st.success("Excellente performance globale")
+        if g1 and g2: st.success("Gouvernance structurée et DG qualifié")
+        if fdr > 0: st.success("Fonds de roulement positif")
 
 # --- ACTIONS FINALES ---
 st.divider()
@@ -158,7 +164,7 @@ with c_btn1:
             " | ".join(alertes_liste)
         ]
         if sauvegarder_dans_sheets(data):
-            st.success("Données enregistrées !")
+            st.success("Données synchronisées avec succès !")
             st.balloons()
 
 with c_btn2:
@@ -169,7 +175,7 @@ with c_btn2:
         pdf.cell(0, 10, clean(f"Coopérative : {nom_coop}"), 0, 1)
         pdf.set_font("Arial", "", 10)
         pdf.cell(0, 7, clean(f"PCA : {pca_nom} | Contact : {pca_contact}"), 0, 1)
-        pdf.cell(0, 7, clean(f"Score Global : {score_final:.1f}%"), 0, 1)
+        pdf.cell(0, 7, clean(f"Score de Performance : {score_final:.1f}%"), 0, 1)
         pdf.ln(5)
         pdf.set_font("Arial", "B", 12)
         pdf.cell(0, 10, "SYNTHESE DES BESOINS ET ALERTES :", 0, 1)
@@ -178,4 +184,5 @@ with c_btn2:
             pdf.cell(0, 7, f"- {clean(a)}", 0, 1)
         return pdf.output(dest='S').encode('latin-1', 'replace')
 
-    st.download_button("📥 Télécharger le Rapport PDF", export_pdf(), f"Audit_{nom_coop}.pdf", "application/pdf", use_container_width=True)
+    st.download_button("📥 Télécharger le Rapport PDF", export_pdf(), 
+                       f"Diagnostic_{nom_coop}.pdf", "application/pdf", use_container_width=True)
