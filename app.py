@@ -15,13 +15,19 @@ def sauvegarder_dans_sheets(donnees):
     try:
         creds = st.secrets["gcp_service_account"]
         gc = gspread.service_account_from_dict(creds)
-        # Assurez-vous que le nom du fichier Sheets est exact
         sh = gc.open("Diagnostics_Coop").sheet1
-        sh.append_row(donnees)
+        
+        # On tente l'ajout
+        resultat = sh.append_row(donnees)
+        
+        # Si on arrive ici sans erreur, ou si on reçoit un code de succès
         return True
     except Exception as e:
-        st.error(f"Erreur Sheets : {e}")
-        return False
+        # On n'affiche l'erreur que si ce n'est pas un code 200
+        if "200" not in str(e):
+            st.error(f"Erreur réelle : {e}")
+            return False
+        return True
 
 # --- LOGIQUE PDF ---
 class PDF(FPDF):
