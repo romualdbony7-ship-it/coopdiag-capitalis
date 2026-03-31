@@ -30,9 +30,27 @@ def lire_historique_sheets():
         creds = st.secrets["gcp_service_account"]
         gc = gspread.service_account_from_dict(creds)
         sh = gc.open("Diagnostics_Coop").sheet1
+        
+        # On récupère les données
         donnees = sh.get_all_records()
+        
+        # Si la liste est vide (seulement les entêtes ou rien)
+        if not donnees:
+            return pd.DataFrame()
+            
         return pd.DataFrame(donnees)
+        
     except Exception as e:
+        # Si l'erreur contient "200", ce n'est pas une erreur, on réessaie 
+        # ou on ignore si c'est un bug d'affichage de la bibliothèque
+        if "200" in str(e):
+            # Tentative secondaire simplifiée
+            try:
+                sh = gc.open("Diagnostics_Coop").sheet1
+                return pd.DataFrame(sh.get_all_records())
+            except:
+                return pd.DataFrame()
+        
         st.error(f"Erreur de lecture : {e}")
         return None
 # --- LOGIQUE PDF ---
