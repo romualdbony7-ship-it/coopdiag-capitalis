@@ -31,25 +31,20 @@ def lire_historique_sheets():
         gc = gspread.service_account_from_dict(creds)
         sh = gc.open("Diagnostics_Coop").sheet1
         
-        # On récupère les données
-        donnees = sh.get_all_records()
-        
-        # Si la liste est vide (seulement les entêtes ou rien)
-        if not donnees:
-            return pd.DataFrame()
-            
-        return pd.DataFrame(donnees)
+        # On tente la lecture classique
+        return pd.DataFrame(sh.get_all_records())
         
     except Exception as e:
-        # Si l'erreur contient "200", ce n'est pas une erreur, on réessaie 
-        # ou on ignore si c'est un bug d'affichage de la bibliothèque
-        if "200" in str(e):
-            # Tentative secondaire simplifiée
+        # Si on reçoit le fameux message <Response [200]>
+        if "200" in str(e) or "Response" in str(e):
             try:
-                sh = gc.open("Diagnostics_Coop").sheet1
-                return pd.DataFrame(sh.get_all_records())
-            except:
+                # On utilise une méthode alternative plus brute
+                data = sh.get_all_values()
+                if len(data) > 1:
+                    return pd.DataFrame(data[1:], columns=data[0])
                 return pd.DataFrame()
+            except:
+                return None
         
         st.error(f"Erreur de lecture : {e}")
         return None
