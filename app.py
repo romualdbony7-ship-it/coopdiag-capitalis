@@ -224,14 +224,27 @@ with c_btn2:
 with tab_hist:
     st.header("📜 Historique des diagnostics")
     if st.button("🔄 Actualiser la liste", use_container_width=True):
-        with st.spinner("Chargement depuis Google Sheets..."):
-            df_historique = lire_historique_sheets()
-            if df_historique is not None and not df_historique.empty:
-                # On affiche les 10 derniers diagnostics
-                st.dataframe(
-                    df_historique.iloc[::-1].head(10), 
-                    use_container_width=True, 
-                    hide_index=True
-                )
-            else:
-                st.info("Aucun diagnostic trouvé dans la base de données.")
+        with st.spinner("Récupération des données..."):
+            try:
+                creds = st.secrets["gcp_service_account"]
+                gc = gspread.service_account_from_dict(creds)
+                sh = gc.open("Diagnostics_Coop").sheet1
+                
+                # On récupère toutes les lignes de la feuille
+                toutes_les_lignes = sh.get_all_values()
+                
+                if len(toutes_les_lignes) > 1:
+                    # La ligne 0 contient les titres, le reste contient les données
+                    df_historique = pd.DataFrame(toutes_les_lignes[1:], columns=toutes_les_lignes[0])
+                    
+                    # On affiche les 10 derniers enregistrements
+                    st.success(f"{len(toutes_les_lignes)-1} diagnostics trouvés.")
+                    st.dataframe(
+                        df_historique.iloc[::-1].head(10), 
+                        use_container_width=True, 
+                        hide_index=True
+                    )
+                else:
+                    st.info("La base de données est vide. Les titres doivent être en ligne 1.")
+            except Exception as e:
+                st.error(f"Erreur de lecture : {e}")
